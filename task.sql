@@ -1,4 +1,4 @@
--- Вывести к каждому самолету класс обслуживания и количество мест этого класса
+-- 1. Вывести к каждому самолету класс обслуживания и количество мест этого класса
 SELECT model ->> 'ru' AS model,
        fare_conditions,
        count(seat_no) AS number_of_seats
@@ -7,7 +7,7 @@ FROM aircrafts_data
 GROUP BY model, fare_conditions
 ORDER BY model;
 
--- Найти 3 самых вместительных самолета (модель + кол-во мест)
+-- 2. Найти 3 самых вместительных самолета (модель + кол-во мест)
 SELECT model ->> 'ru' AS model,
        count(seat_no) AS number_of_seats
 FROM aircrafts_data
@@ -16,7 +16,7 @@ GROUP BY aircrafts_data.aircraft_code
 ORDER BY number_of_seats DESC
 LIMIT 3;
 
--- Вывести код, модель самолета и места не эконом класса для самолета 'Аэробус A321-200' с сортировкой по местам
+-- 3. Вывести код, модель самолета и места не эконом класса для самолета 'Аэробус A321-200' с сортировкой по местам
 SELECT aircrafts_data.aircraft_code,
        model ->> 'ru' AS model,
        seat_no
@@ -26,7 +26,7 @@ WHERE model ->> 'ru' = 'Аэробус A321-200'
   AND fare_conditions != 'Economy'
 ORDER BY seat_no;
 
--- Вывести города в которых больше 1 аэропорта ( код аэропорта, аэропорт, город)
+-- 4. Вывести города в которых больше 1 аэропорта (код аэропорта, аэропорт, город)
 SELECT airport_code,
        airport_name ->> 'en' AS name,
        city ->> 'ru'         AS city
@@ -37,7 +37,7 @@ WHERE city IN (SELECT city
                HAVING count(*) > 1)
 ORDER BY city;
 
--- Найти ближайший вылетающий рейс из Екатеринбурга в Москву, на который еще не завершилась регистрация
+-- 5. Найти ближайший вылетающий рейс из Екатеринбурга в Москву, на который еще не завершилась регистрация
 SELECT flight_id,
        dep.city ->> 'ru' AS departure,
        arr.city ->> 'ru' AS arrival,
@@ -52,7 +52,7 @@ WHERE dep.city ->> 'ru' = 'Екатеринбург'
 ORDER BY scheduled_departure
 LIMIT 1;
 
--- Вывести самый дешевый и дорогой билет и стоимость ( в одном результирующем ответе)
+-- 6. Вывести самый дешевый и дорогой билет и стоимость (в одном результирующем ответе)
 SELECT concat('Cheapest #', tf1.ticket_no, ', price = ', tf1.amount)  AS cheapest,
        concat('Expensive #', tf2.ticket_no, ', price = ', tf2.amount) AS expensive
 FROM ticket_flights tf1
@@ -61,7 +61,7 @@ FROM ticket_flights tf1
                   AND tf2.amount = (SELECT MAX(amount) FROM ticket_flights)
 LIMIT 1;
 
--- Вывести информацию о вылете с наибольшей суммарной стоимостью билетов
+-- 7. Вывести информацию о вылете с наибольшей суммарной стоимостью билетов
 SELECT flight.flight_id,
        flight.flight_no,
        flight.scheduled_departure,
@@ -77,7 +77,7 @@ GROUP BY flight.flight_id
 ORDER BY highest_total_amount DESC
 LIMIT 1;
 
--- Найти модель самолета, принесшую наибольшую прибыль (наибольшая суммарная стоимость билетов). Вывести код модели,
+-- 8. Найти модель самолета, принесшую наибольшую прибыль (наибольшая суммарная стоимость билетов). Вывести код модели,
 -- информацию о модели и общую стоимость
 SELECT aircraft.aircraft_code,
        aircraft.model ->> 'ru' AS model,
@@ -90,7 +90,7 @@ GROUP BY aircraft.aircraft_code
 ORDER BY highest_total_amount DESC
 LIMIT 1;
 
--- Найти самый частый аэропорт назначения для каждой модели самолета. Вывести количество вылетов,
+-- 9. Найти самый частый аэропорт назначения для каждой модели самолета. Вывести количество вылетов,
 -- информацию о модели самолета, аэропорт назначения, город
 WITH ranked_flights AS (SELECT count(*)                                                               AS number_of_flights,
                                aircraft.model ->> 'ru'                                                AS model,
