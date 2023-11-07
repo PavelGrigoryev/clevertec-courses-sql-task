@@ -1,11 +1,10 @@
 -- 1. Вывести к каждому самолету класс обслуживания и количество мест этого класса
-SELECT model ->> 'ru' AS model,
+SELECT aircraft.aircraft_code,
        fare_conditions,
        count(seat_no) AS number_of_seats
-FROM aircrafts_data
-         JOIN seats ON aircrafts_data.aircraft_code = seats.aircraft_code
-GROUP BY model, fare_conditions
-ORDER BY model;
+FROM aircrafts_data AS aircraft
+         JOIN seats ON aircraft.aircraft_code = seats.aircraft_code
+GROUP BY aircraft.aircraft_code, fare_conditions;
 
 -- 2. Найти 3 самых вместительных самолета (модель + кол-во мест)
 SELECT model ->> 'ru' AS model,
@@ -53,55 +52,59 @@ ORDER BY scheduled_departure
 LIMIT 1;
 
 -- 6. Вывести самый дешевый и дорогой билет и стоимость (в одном результирующем ответе)
-SELECT concat('Cheapest #', tf1.ticket_no, ', price = ', tf1.amount)  AS cheapest,
-       concat('Expensive #', tf2.ticket_no, ', price = ', tf2.amount) AS expensive
-FROM ticket_flights tf1
-         JOIN ticket_flights tf2
-              ON tf1.amount = (SELECT MIN(amount) FROM ticket_flights)
-                  AND tf2.amount = (SELECT MAX(amount) FROM ticket_flights)
-LIMIT 1;
+WITH c_e AS (SELECT min(amount) AS cheapest,
+                    max(amount) AS expensive
+             FROM ticket_flights)
+    (SELECT ticket_flights.*
+     FROM ticket_flights
+              JOIN c_e ON ticket_flights.amount = c_e.cheapest
+     LIMIT 1)
+UNION ALL
+(SELECT ticket_flights.*
+ FROM ticket_flights
+          JOIN c_e ON ticket_flights.amount = c_e.expensive
+ LIMIT 1);
 
 -- 7. Вывести информацию о вылете с наибольшей суммарной стоимостью билетов
-SELECT flight.flight_id,
-       flight.flight_no,
-       flight.scheduled_departure,
-       flight.scheduled_arrival,
-       flight.departure_airport,
-       flight.arrival_airport,
-       flight.status,
-       flight.aircraft_code,
-       sum(amount) AS highest_total_amount
-FROM flights AS flight
-         JOIN ticket_flights ON flight.flight_id = ticket_flights.flight_id
-GROUP BY flight.flight_id
-ORDER BY highest_total_amount DESC
-LIMIT 1;
+WITH sum_amount AS (SELECT flight_id,
+                           sum(amount) AS highest_total_amount
+                    FROM ticket_flights
+                    GROUP BY flight_id)
+SELECT flight.*,
+       highest_total_amount
+FROM flights flight
+         JOIN sum_amount AS s_m ON s_m.flight_id = flight.flight_id
+WHERE highest_total_amount = (SELECT max(highest_total_amount) FROM sum_amount);
 
 -- 8. Найти модель самолета, принесшую наибольшую прибыль (наибольшая суммарная стоимость билетов). Вывести код модели,
 -- информацию о модели и общую стоимость
+WITH sum_amount AS (SELECT flights.aircraft_code,
+                           sum(amount) AS highest_total_amount
+                    FROM ticket_flights
+                             JOIN flights ON ticket_flights.flight_id = flights.flight_id
+                    GROUP BY flights.aircraft_code)
 SELECT aircraft.aircraft_code,
        aircraft.model ->> 'ru' AS model,
        aircraft.range,
-       sum(amount)             AS highest_total_amount
-FROM ticket_flights
-         JOIN flights ON ticket_flights.flight_id = flights.flight_id
-         JOIN aircrafts_data AS aircraft ON flights.aircraft_code = aircraft.aircraft_code
-GROUP BY aircraft.aircraft_code
-ORDER BY highest_total_amount DESC
-LIMIT 1;
+       highest_total_amount
+FROM aircrafts_data AS aircraft
+         JOIN sum_amount AS s_m ON s_m.aircraft_code = aircraft.aircraft_code
+WHERE highest_total_amount = (SELECT max(highest_total_amount) FROM sum_amount);
 
 -- 9. Найти самый частый аэропорт назначения для каждой модели самолета. Вывести количество вылетов,
 -- информацию о модели самолета, аэропорт назначения, город
-WITH ranked_flights AS (SELECT count(*)                                                               AS number_of_flights,
-                               aircraft.model ->> 'ru'                                                AS model,
-                               airport.airport_name ->> 'ru'                                          AS airport_name,
-                               airport.city ->> 'ru'                                                  AS city,
-                               row_number() OVER (PARTITION BY aircraft.model ORDER BY count(*) DESC) AS rn
+WITH ranked_flights AS (SELECT aircraft_code,
+                               arrival_airport,
+                               count(*)                                                              AS number_of_flights,
+                               row_number() OVER (PARTITION BY aircraft_code ORDER BY count(*) DESC) AS rn
                         FROM flights
-                                 JOIN aircrafts_data aircraft ON flights.aircraft_code = aircraft.aircraft_code
-                                 JOIN airports_data airport ON flights.arrival_airport = airport.airport_code
-                        GROUP BY model, airport_name, city)
-SELECT number_of_flights, model, airport_name, city
-FROM ranked_flights
+                        GROUP BY aircraft_code, arrival_airport)
+SELECT number_of_flights,
+       aircraft.model ->> 'ru'       AS model,
+       airport.airport_name ->> 'ru' AS airport_name,
+       airport.city ->> 'ru'         AS city
+FROM ranked_flights r_f
+         JOIN aircrafts_data aircraft ON r_f.aircraft_code = aircraft.aircraft_code
+         JOIN airports_data airport ON r_f.arrival_airport = airport.airport_code
 WHERE rn = 1
 ORDER BY number_of_flights DESC;
